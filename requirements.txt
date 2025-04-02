@@ -1,0 +1,9 @@
+Flask
+Flask-SQLAlchemy
+Flask-RESTful
+numpy
+pandas
+scikit-learn
+python-dateutil
+Werkzeug
+Flask-Cors

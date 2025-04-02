@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance System - Admin Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <h1>Attendance System Dashboard</h1>
+            <div class="user-info">
+                <span>Admin</span>
+            </div>
+        </header>
+        
+        <nav class="dashboard-nav">
+            <ul>
+                <li class="active"><a href="#" data-section="overview">Overview</a></li>
+                <li><a href="#" data-section="employees">Employees</a></li>
+                <li><a href="#" data-section="alerts">Alerts</a></li>
+                <li><a href="#" data-section="reports">Reports</a></li>
+            </ul>
+        </nav>
+        
+        <main class="dashboard-content">
+            <!-- Overview Section -->
+            <section id="overview" class="section active">
+                <h2>System Overview</h2>
+                
+                <div class="dashboard-stats">
+                    <div class="stat-card">
+                        <h3>Total Employees</h3>
+                        <p class="stat-number" id="total-employees">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Present Today</h3>
+                        <p class="stat-number" id="present-today">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>On Break</h3>
+                        <p class="stat-number" id="on-break">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Alerts Today</h3>
+                        <p class="stat-number" id="alerts-today">0</p>
+                    </div>
+                </div>
+                
+                <div class="chart-container">
+                    <div class="chart-card">
+                        <h3>Attendance Trend</h3>
+                        <canvas id="attendance-chart"></canvas>
+                    </div>
+                    <div class="chart-card">
+                        <h3>Alert Types</h3>
+                        <canvas id="alert-chart"></canvas>
+                    </div>
+                </div>
+                
+                <div class="recent-activity">
+                    <h3>Recent Activities</h3>
+                    <div class="activity-list" id="recent-activities">
+                        <!-- Activities will be populated via JavaScript -->
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Employee Section -->
+            <section id="employees" class="section">
+                <h2>Employee Management</h2>
+                <div class="search-container">
+                    <input type="text" id="employee-search" placeholder="Search employees...">
+                    <button id="search-btn">Search</button>
+                </div>
+                
+                <div class="employee-list" id="employee-results">
+                    <!-- Employees will be populated via JavaScript -->
+                </div>
+                
+                <div class="employee-details-container" id="employee-details">
+                    <!-- Selected employee details -->
+                </div>
+            </section>
+            
+            <!-- Alerts Section -->
+            <section id="alerts" class="section">
+                <h2>System Alerts</h2>
+                
+                <div class="alert-filters">
+                    <select id="alert-severity-filter">
+                        <option value="">All Severities</option>
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="critical">Critical</option>
+                    </select>
+                    
+                    <select id="alert-time-filter">
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="all">All Time</option>
+                    </select>
+                </div>
+                
+                <div class="alerts-container" id="alerts-list">
+                    <!-- Alerts will be populated via JavaScript -->
+                </div>
+            </section>
+            
+            <!-- Reports Section -->
+            <section id="reports" class="section">
+                <h2>Reports</h2>
+                
+                <div class="report-options">
+                    <div class="report-type">
+                        <h3>Attendance Report</h3>
+                        <p>Generate attendance reports by date range, department or employee.</p>
+                        <button id="attendance-report-btn">Generate Report</button>
+                    </div>
+                    
+                    <div class="report-type">
+                        <h3>Anomaly Report</h3>
+                        <p>Generate reports for detected anomalies and unusual patterns.</p>
+                        <button id="anomaly-report-btn">Generate Report</button>
+                    </div>
+                    
+                    <div class="report-type">
+                        <h3>Work Hours Report</h3>
+                        <p>Generate reports for employee work hours and overtime.</p>
+                        <button id="hours-report-btn">Generate Report</button>
+                    </div>
+                </div>
+                
+                <div class="report-result" id="report-result">
+                    <!-- Report results will be displayed here -->
+                </div>
+            </section>
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html> 
