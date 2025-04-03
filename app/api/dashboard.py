@@ -46,53 +46,147 @@ def get_dashboard_stats():
 
 @dashboard_bp.route('/activities', methods=['GET'])
 def get_recent_activities():
-    # Get recent check-ins, check-outs, and alerts
+    # Get recent check-ins, check-outs, breaks, and alerts with more detail
+    from flask import request
+    
+    # Get limit parameter (default to 10)
+    limit = request.args.get('limit', 10, type=int)
+    
+    # Get hours parameter (default to 24 - show last 24 hours)
+    hours = request.args.get('hours', 24, type=int)
+    
+    # Calculate the time threshold
+    time_threshold = datetime.now() - timedelta(hours=hours)
     today = datetime.now().date()
     activities = []
     
-    # Recent check-ins
+    # Recent check-ins with more details
     recent_checkins = AttendanceRecord.query.filter(
-        AttendanceRecord.date >= today - timedelta(days=1),
-        AttendanceRecord.time_in != None
-    ).order_by(AttendanceRecord.time_in.desc()).limit(5).all()
+        AttendanceRecord.time_in >= time_threshold
+    ).order_by(AttendanceRecord.time_in.desc()).limit(limit).all()
     
     for record in recent_checkins:
         employee = Employee.query.get(record.employee_id)
-        activities.append({
-            'time': record.time_in.strftime('%Y-%m-%d %H:%M:%S'),
-            'description': f'{employee.name} checked in'
-        })
+        if employee:
+            time_str = record.time_in.strftime('%Y-%m-%d %H:%M:%S')
+            activities.append({
+                'id': f"checkin_{record.id}",
+                'time': time_str,
+                'timestamp': record.time_in.timestamp(),
+                'type': 'check-in',
+                'employee_id': employee.employee_id,
+                'employee_name': employee.name,
+                'department': employee.department,
+                'description': f'{employee.name} checked in',
+                'details': {
+                    'time': record.time_in.strftime('%H:%M:%S'),
+                    'date': record.date.strftime('%Y-%m-%d')
+                }
+            })
     
-    # Recent check-outs
+    # Recent check-outs with more details
     recent_checkouts = AttendanceRecord.query.filter(
-        AttendanceRecord.date >= today - timedelta(days=1),
-        AttendanceRecord.time_out != None
-    ).order_by(AttendanceRecord.time_out.desc()).limit(5).all()
+        AttendanceRecord.time_out >= time_threshold
+    ).order_by(AttendanceRecord.time_out.desc()).limit(limit).all()
     
     for record in recent_checkouts:
         employee = Employee.query.get(record.employee_id)
-        activities.append({
-            'time': record.time_out.strftime('%Y-%m-%d %H:%M:%S'),
-            'description': f'{employee.name} checked out'
-        })
+        if employee and record.time_out:
+            time_str = record.time_out.strftime('%Y-%m-%d %H:%M:%S')
+            hours_worked = record.total_hours if record.total_hours else 0
+            activities.append({
+                'id': f"checkout_{record.id}",
+                'time': time_str,
+                'timestamp': record.time_out.timestamp(),
+                'type': 'check-out',
+                'employee_id': employee.employee_id,
+                'employee_name': employee.name,
+                'department': employee.department,
+                'description': f'{employee.name} checked out',
+                'details': {
+                    'time': record.time_out.strftime('%H:%M:%S'),
+                    'date': record.date.strftime('%Y-%m-%d'),
+                    'hours_worked': f"{hours_worked:.2f} hours"
+                }
+            })
     
-    # Recent alerts
+    # Recent breaks
+    recent_breaks = Break.query.join(
+        AttendanceRecord, Break.attendance_record_id == AttendanceRecord.id
+    ).filter(
+        Break.start_time >= time_threshold
+    ).order_by(Break.start_time.desc()).limit(limit).all()
+    
+    for break_record in recent_breaks:
+        attendance = AttendanceRecord.query.get(break_record.attendance_record_id)
+        employee = Employee.query.get(attendance.employee_id) if attendance else None
+        
+        if employee and break_record.start_time:
+            time_str = break_record.start_time.strftime('%Y-%m-%d %H:%M:%S')
+            
+            # Break status
+            if break_record.end_time:
+                status = "ended"
+                duration = break_record.duration or 0
+                detail = f"Duration: {duration:.0f} minutes"
+            else:
+                status = "started"
+                detail = "Currently on break"
+                
+            activities.append({
+                'id': f"break_{break_record.id}",
+                'time': time_str,
+                'timestamp': break_record.start_time.timestamp(),
+                'type': 'break',
+                'employee_id': employee.employee_id,
+                'employee_name': employee.name,
+                'department': employee.department,
+                'description': f'{employee.name} {status} break',
+                'details': {
+                    'time': break_record.start_time.strftime('%H:%M:%S'),
+                    'date': attendance.date.strftime('%Y-%m-%d'),
+                    'status': status,
+                    'detail': detail
+                }
+            })
+    
+    # Recent alerts with more details
     recent_alerts = Alert.query.filter(
-        Alert.timestamp >= datetime.now() - timedelta(days=1)
-    ).order_by(Alert.timestamp.desc()).limit(5).all()
+        Alert.timestamp >= time_threshold
+    ).order_by(Alert.timestamp.desc()).limit(limit).all()
     
     for alert in recent_alerts:
         employee = Employee.query.get(alert.employee_id)
-        activities.append({
-            'time': alert.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
-            'description': f'Alert for {employee.name}: {alert.alert_type}'
-        })
+        if employee:
+            time_str = alert.timestamp.strftime('%Y-%m-%d %H:%M:%S')
+            activities.append({
+                'id': f"alert_{alert.id}",
+                'time': time_str,
+                'timestamp': alert.timestamp.timestamp(),
+                'type': 'alert',
+                'employee_id': employee.employee_id,
+                'employee_name': employee.name,
+                'department': employee.department,
+                'description': f'Alert: {alert.alert_type} for {employee.name}',
+                'details': {
+                    'time': alert.timestamp.strftime('%H:%M:%S'),
+                    'date': alert.timestamp.strftime('%Y-%m-%d'),
+                    'severity': alert.severity,
+                    'alert_type': alert.alert_type,
+                    'description': alert.description,
+                    'resolved': 'Yes' if alert.is_resolved else 'No'
+                }
+            })
     
     # Sort activities by time, most recent first
-    activities.sort(key=lambda x: datetime.strptime(x['time'], '%Y-%m-%d %H:%M:%S'), reverse=True)
+    activities.sort(key=lambda x: x['timestamp'], reverse=True)
+    
+    # Limit to requested number
+    activities = activities[:limit]
     
     return jsonify({
-        'activities': activities[:10]  # Return top 10 activities
+        'activities': activities,
+        'last_updated': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }), 200
 
 def get_attendance_trend(days):
@@ -126,4 +220,116 @@ def get_alert_types_distribution():
         'Medium': medium_count,
         'High': high_count,
         'Critical': critical_count
-    } 
+    }
+
+@dashboard_bp.route('/alerts', methods=['GET'])
+def get_alerts():
+    from flask import request
+    from datetime import datetime, timedelta
+    
+    # Get query parameters
+    employee_id = request.args.get('employee_id')
+    severity = request.args.get('severity')
+    time_filter = request.args.get('time_filter', 'all')
+    
+    # Base query
+    query = Alert.query
+    
+    # Apply filters
+    if employee_id:
+        query = query.filter_by(employee_id=employee_id)
+        
+    if severity:
+        query = query.filter_by(severity=severity)
+    
+    # Apply time filter
+    if time_filter != 'all':
+        now = datetime.now()
+        if time_filter == 'today':
+            start_date = datetime.combine(now.date(), datetime.min.time())
+            query = query.filter(Alert.timestamp >= start_date)
+        elif time_filter == 'week':
+            start_date = now - timedelta(days=7)
+            query = query.filter(Alert.timestamp >= start_date)
+        elif time_filter == 'month':
+            start_date = now - timedelta(days=30)
+            query = query.filter(Alert.timestamp >= start_date)
+    
+    # Execute query and get results
+    alerts = query.order_by(Alert.timestamp.desc()).all()
+    
+    # Format results
+    result = []
+    for alert in alerts:
+        employee = Employee.query.get(alert.employee_id)
+        result.append({
+            'id': alert.id,
+            'employee_id': alert.employee_id,
+            'employee_name': employee.name if employee else 'Unknown',
+            'timestamp': alert.timestamp.strftime('%Y-%m-%d %H:%M:%S'),
+            'alert_type': alert.alert_type,
+            'description': alert.description,
+            'severity': alert.severity,
+            'resolved': alert.is_resolved
+        })
+    
+    return jsonify({
+        'alerts': result
+    }), 200
+
+@dashboard_bp.route('/create-alert', methods=['POST'])
+def create_test_alert():
+    """Create a test alert for demonstration purposes"""
+    from flask import request
+    
+    try:
+        data = request.get_json()
+        
+        # Validate required fields
+        required_fields = ['employee_id', 'alert_type', 'description', 'severity']
+        for field in required_fields:
+            if field not in data:
+                return jsonify({'error': f'Missing required field: {field}'}), 400
+        
+        # Create the alert
+        alert = Alert(
+            employee_id=data['employee_id'],
+            alert_type=data['alert_type'],
+            description=data['description'],
+            severity=data['severity'],
+            timestamp=datetime.now(),
+            is_resolved=False
+        )
+        
+        db.session.add(alert)
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Alert created successfully',
+            'alert_id': alert.id
+        }), 201
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@dashboard_bp.route('/alerts/<int:alert_id>/resolve', methods=['POST'])
+def resolve_alert(alert_id):
+    """Mark an alert as resolved"""
+    try:
+        alert = Alert.query.get(alert_id)
+        
+        if not alert:
+            return jsonify({'error': 'Alert not found'}), 404
+            
+        alert.is_resolved = True
+        db.session.commit()
+        
+        return jsonify({
+            'message': 'Alert marked as resolved',
+            'alert_id': alert.id
+        }), 200
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500 

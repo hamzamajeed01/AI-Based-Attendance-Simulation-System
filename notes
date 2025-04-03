@@ -1,0 +1,11 @@
+   # Seed the database with employees
+   python run_simulation.py --seed
+   
+   # Generate historical data (for ML training)
+   python run_simulation.py --historical --days 30
+   
+   # Simulate a full day
+   python run_simulation.py --simulate
+   
+   # Interactive mode for manual testing
+   python run_simulation.py --interactive

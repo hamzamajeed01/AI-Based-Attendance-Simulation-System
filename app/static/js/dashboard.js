@@ -23,6 +23,17 @@ document.addEventListener('DOMContentLoaded', function() {
     // Load dashboard data
     loadDashboardData();
     
+    // Set up auto-refresh for real-time data
+    setInterval(function() {
+        loadDashboardData();
+        if (document.getElementById('overview').classList.contains('active')) {
+            loadRecentActivities();
+        }
+        if (document.getElementById('alerts').classList.contains('active')) {
+            loadAlerts();
+        }
+    }, 30000); // Refresh every 30 seconds
+    
     // Set up employee search
     const searchBtn = document.getElementById('search-btn');
     const searchInput = document.getElementById('employee-search');
@@ -59,13 +70,21 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('hours-report-btn').addEventListener('click', function() {
         generateReport('hours');
     });
+    
+    // Load initial recent activities
+    loadRecentActivities();
 });
 
 // Function to load dashboard overview data
 function loadDashboardData() {
     // Fetch statistics
     fetch('/api/dashboard/stats')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
         .then(data => {
             document.getElementById('total-employees').textContent = data.total_employees || 0;
             document.getElementById('present-today').textContent = data.present_today || 0;
@@ -84,37 +103,133 @@ function loadDashboardData() {
         .catch(error => {
             console.error('Error loading dashboard stats:', error);
         });
-    
-    // Fetch recent activities
-    fetch('/api/dashboard/activities')
-        .then(response => response.json())
+}
+
+// Function to load and display recent activities
+function loadRecentActivities() {
+    // Fetch recent activities with limit parameter
+    fetch('/api/dashboard/activities?limit=15')
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
         .then(data => {
             const activitiesContainer = document.getElementById('recent-activities');
             activitiesContainer.innerHTML = '';
             
             if (data.activities && data.activities.length > 0) {
+                // Create the activities list
+                const activitiesList = document.createElement('div');
+                activitiesList.className = 'activities-list';
+                
                 data.activities.forEach(activity => {
+                    // Format timestamp for better readability
+                    const activityDate = new Date(activity.time);
+                    const formattedTime = activityDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                    const formattedDate = activityDate.toLocaleDateString();
+                    
+                    // Create activity item with appropriate styling
                     const activityItem = document.createElement('div');
-                    activityItem.className = 'activity-item';
+                    activityItem.className = `activity-item activity-${activity.type || 'default'}`;
+                    activityItem.dataset.id = activity.id || '';
+                    
+                    // Create and append the icon based on activity type
+                    let icon = '';
+                    let typeClass = '';
+                    
+                    if (activity.type === 'check-in') {
+                        icon = '→';
+                        typeClass = 'check-in';
+                    } else if (activity.type === 'check-out') {
+                        icon = '←';
+                        typeClass = 'check-out';
+                    } else if (activity.type === 'break') {
+                        icon = '⏸';
+                        typeClass = 'break';
+                    } else if (activity.type === 'alert') {
+                        icon = '⚠';
+                        typeClass = `alert ${activity.details?.severity || ''}`;
+                    } else {
+                        icon = '•';
+                        typeClass = 'default';
+                    }
+                    
                     activityItem.innerHTML = `
-                        <p><strong>${activity.time}</strong> - ${activity.description}</p>
+                        <div class="activity-header">
+                            <span class="activity-icon ${typeClass}">${icon}</span>
+                            <div class="activity-time">
+                                <span class="time">${formattedTime}</span>
+                                <span class="date">${formattedDate}</span>
+                            </div>
+                        </div>
+                        <div class="activity-content">
+                            <p class="activity-description">${activity.description}</p>
+                            <p class="activity-detail">${activity.employee_name || ''} ${activity.department ? `(${activity.department})` : ''}</p>
+                        </div>
                     `;
-                    activitiesContainer.appendChild(activityItem);
+                    
+                    // Add click event to view details if available
+                    if (activity.details) {
+                        activityItem.addEventListener('click', function() {
+                            showActivityDetails(activity);
+                        });
+                        activityItem.style.cursor = 'pointer';
+                    }
+                    
+                    activitiesList.appendChild(activityItem);
                 });
+                
+                // Add update time
+                const updateInfo = document.createElement('div');
+                updateInfo.className = 'update-info';
+                updateInfo.innerHTML = `<small>Last updated: ${data.last_updated || new Date().toLocaleString()}</small>`;
+                
+                // Append to the container
+                activitiesContainer.appendChild(activitiesList);
+                activitiesContainer.appendChild(updateInfo);
             } else {
-                activitiesContainer.innerHTML = '<p>No recent activities</p>';
+                activitiesContainer.innerHTML = '<p class="no-data">No recent activities</p>';
             }
         })
         .catch(error => {
             console.error('Error loading recent activities:', error);
+            document.getElementById('recent-activities').innerHTML = 
+                '<p class="error-message">Error loading activities. Please try refreshing the page.</p>';
         });
+}
+
+// Function to show activity details in a popup
+function showActivityDetails(activity) {
+    // Create a simple popup with activity details
+    const detailsContent = `
+        <h3>${activity.description}</h3>
+        <p><strong>Time:</strong> ${activity.time}</p>
+        <p><strong>Employee:</strong> ${activity.employee_name || 'Unknown'}</p>
+        ${activity.department ? `<p><strong>Department:</strong> ${activity.department}</p>` : ''}
+        
+        <h4>Details:</h4>
+        <ul>
+            ${Object.entries(activity.details || {}).map(([key, value]) => 
+                `<li><strong>${key.charAt(0).toUpperCase() + key.slice(1)}:</strong> ${value}</li>`
+            ).join('')}
+        </ul>
+    `;
+    
+    alert(detailsContent.replace(/<[^>]*>/g, '')); // Simple alert for now, replace with modal in production
 }
 
 // Function to render attendance trend chart
 function renderAttendanceChart(data) {
     const ctx = document.getElementById('attendance-chart').getContext('2d');
     
-    new Chart(ctx, {
+    // Destroy existing chart if it exists to prevent conflicts
+    if (window.attendanceChart) {
+        window.attendanceChart.destroy();
+    }
+    
+    window.attendanceChart = new Chart(ctx, {
         type: 'line',
         data: {
             labels: data.dates,
@@ -135,6 +250,10 @@ function renderAttendanceChart(data) {
                 legend: {
                     display: true,
                     position: 'top'
+                },
+                tooltip: {
+                    mode: 'index',
+                    intersect: false
                 }
             },
             scales: {
@@ -153,7 +272,12 @@ function renderAttendanceChart(data) {
 function renderAlertChart(data) {
     const ctx = document.getElementById('alert-chart').getContext('2d');
     
-    new Chart(ctx, {
+    // Destroy existing chart if it exists to prevent conflicts
+    if (window.alertChart) {
+        window.alertChart.destroy();
+    }
+    
+    window.alertChart = new Chart(ctx, {
         type: 'doughnut',
         data: {
             labels: Object.keys(data),
@@ -173,7 +297,21 @@ function renderAlertChart(data) {
             maintainAspectRatio: false,
             plugins: {
                 legend: {
-                    position: 'right'
+                    position: 'right',
+                    labels: {
+                        padding: 20
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const label = context.label || '';
+                            const value = context.raw || 0;
+                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                            const percentage = total > 0 ? Math.round((value / total) * 100) : 0;
+                            return `${label}: ${value} (${percentage}%)`;
+                        }
+                    }
                 }
             }
         }
@@ -350,7 +488,8 @@ function loadAlerts(employeeId = null) {
     const severity = document.getElementById('alert-severity-filter').value;
     const timeFilter = document.getElementById('alert-time-filter').value;
     
-    let url = '/api/alerts?';
+    // Construct API URL with query parameters
+    let url = '/api/dashboard/alerts?';
     
     if (employeeId) {
         url += `employee_id=${employeeId}&`;
@@ -360,58 +499,217 @@ function loadAlerts(employeeId = null) {
         url += `severity=${severity}&`;
     }
     
+    url += `time_filter=${timeFilter}`;
+    
+    // Show loading state
+    const alertsContainer = document.getElementById('alerts-list');
+    alertsContainer.innerHTML = '<div class="loading">Loading alerts...</div>';
+    
     fetch(url)
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            return response.json();
+        })
         .then(data => {
-            const alertsContainer = document.getElementById('alerts-list');
             alertsContainer.innerHTML = '';
             
             if (data.alerts && data.alerts.length > 0) {
-                // Filter by time if needed
-                let filteredAlerts = data.alerts;
+                // Create alerts table
+                const alertsTable = document.createElement('table');
+                alertsTable.className = 'alerts-table';
                 
-                if (timeFilter !== 'all') {
-                    const now = new Date();
-                    let startDate = new Date();
-                    
-                    if (timeFilter === 'today') {
-                        startDate.setHours(0, 0, 0, 0);
-                    } else if (timeFilter === 'week') {
-                        startDate.setDate(now.getDate() - 7);
-                    } else if (timeFilter === 'month') {
-                        startDate.setMonth(now.getMonth() - 1);
-                    }
-                    
-                    filteredAlerts = data.alerts.filter(alert => {
-                        const alertDate = new Date(alert.timestamp);
-                        return alertDate >= startDate;
-                    });
-                }
+                // Create table header
+                const tableHeader = document.createElement('thead');
+                tableHeader.innerHTML = `
+                    <tr>
+                        <th>Time</th>
+                        <th>Employee</th>
+                        <th>Type</th>
+                        <th>Description</th>
+                        <th>Severity</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                `;
+                alertsTable.appendChild(tableHeader);
                 
-                filteredAlerts.forEach(alert => {
-                    const alertItem = document.createElement('div');
-                    alertItem.className = `alert-item ${alert.severity}`;
+                // Create table body
+                const tableBody = document.createElement('tbody');
+                
+                data.alerts.forEach(alert => {
+                    const alertRow = document.createElement('tr');
+                    alertRow.className = `alert-row ${alert.severity}`;
                     
-                    alertItem.innerHTML = `
-                        <h3>
-                            ${alert.alert_type}
-                            <span class="alert-severity ${alert.severity}">${alert.severity.toUpperCase()}</span>
-                        </h3>
-                        <p>${alert.description}</p>
-                        <p class="alert-timestamp">
-                            <small>${alert.timestamp}</small>
-                        </p>
+                    // Format date for better readability
+                    const alertDate = new Date(alert.timestamp);
+                    const formattedDate = alertDate.toLocaleString();
+                    
+                    // Status badge
+                    const statusBadge = alert.is_resolved ? 
+                        '<span class="status-badge resolved">Resolved</span>' : 
+                        '<span class="status-badge active">Active</span>';
+                    
+                    // Action buttons
+                    const actionButtons = alert.is_resolved ?
+                        '<button class="btn-view" onclick="viewAlertDetails(' + alert.id + ')">View</button>' :
+                        '<button class="btn-view" onclick="viewAlertDetails(' + alert.id + ')">View</button>' +
+                        '<button class="btn-resolve" onclick="resolveAlert(' + alert.id + ')">Resolve</button>';
+                    
+                    alertRow.innerHTML = `
+                        <td>${formattedDate}</td>
+                        <td>${alert.employee_name}</td>
+                        <td>${alert.alert_type}</td>
+                        <td>${alert.description}</td>
+                        <td><span class="alert-severity ${alert.severity}">${alert.severity.toUpperCase()}</span></td>
+                        <td>${statusBadge}</td>
+                        <td class="action-buttons">${actionButtons}</td>
                     `;
                     
-                    alertsContainer.appendChild(alertItem);
+                    tableBody.appendChild(alertRow);
                 });
+                
+                alertsTable.appendChild(tableBody);
+                alertsContainer.appendChild(alertsTable);
             } else {
-                alertsContainer.innerHTML = '<p>No alerts found</p>';
+                // If no alerts found, show message with option to generate alerts
+                const noAlertsDiv = document.createElement('div');
+                noAlertsDiv.className = 'no-alerts';
+                noAlertsDiv.innerHTML = `
+                    <p>No alerts found matching the selected filters.</p>
+                    <p>Try changing the severity or time filter.</p>
+                    <button id="generate-sample-alerts" class="btn">Generate Sample Alerts for Testing</button>
+                `;
+                alertsContainer.appendChild(noAlertsDiv);
+                
+                // Add event listener to generate sample alerts
+                document.getElementById('generate-sample-alerts').addEventListener('click', function() {
+                    generateSampleAlerts();
+                });
             }
         })
         .catch(error => {
             console.error('Error loading alerts:', error);
+            alertsContainer.innerHTML = `
+                <div class="error-message">
+                    <p>An error occurred while loading alerts.</p>
+                    <p>Please try again later or contact support if the problem persists.</p>
+                    <button id="generate-sample-alerts" class="btn">Generate Sample Alerts for Testing</button>
+                </div>
+            `;
+            
+            // Add event listener to generate sample alerts
+            document.getElementById('generate-sample-alerts').addEventListener('click', function() {
+                generateSampleAlerts();
+            });
         });
+}
+
+// Function to generate sample alerts for testing
+function generateSampleAlerts() {
+    // Show loading state
+    const alertsContainer = document.getElementById('alerts-list');
+    alertsContainer.innerHTML = '<div class="loading">Generating sample alerts...</div>';
+    
+    // Get employees
+    fetch('/api/employees')
+        .then(response => response.json())
+        .then(data => {
+            if (data.employees && data.employees.length > 0) {
+                // Make API calls to generate alerts
+                const promises = [];
+                
+                // Generate different types of alerts
+                const alertTypes = [
+                    { type: 'Excessive Break', severity: 'medium' },
+                    { type: 'Late Check-in', severity: 'low' },
+                    { type: 'Early Departure', severity: 'medium' },
+                    { type: 'Multiple Check-ins', severity: 'low' },
+                    { type: 'Missing Check-out', severity: 'high' },
+                    { type: 'Unauthorized Access', severity: 'critical' }
+                ];
+                
+                // Use first 3 employees for sample alerts
+                const sampleEmployees = data.employees.slice(0, 3);
+                
+                sampleEmployees.forEach(employee => {
+                    // Generate 2 random alerts for each employee
+                    for (let i = 0; i < 2; i++) {
+                        const randomAlert = alertTypes[Math.floor(Math.random() * alertTypes.length)];
+                        
+                        // Create random description
+                        const description = `${randomAlert.type} detected for ${employee.name} on ${new Date().toLocaleDateString()}`;
+                        
+                        const alertData = {
+                            employee_id: employee.employee_id,
+                            alert_type: randomAlert.type,
+                            description: description,
+                            severity: randomAlert.severity,
+                            timestamp: new Date().toISOString()
+                        };
+                        
+                        // Make API call to create alert
+                        promises.push(
+                            fetch('/api/dashboard/create-alert', {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify(alertData)
+                            })
+                        );
+                    }
+                });
+                
+                // Wait for all API calls to complete
+                Promise.all(promises)
+                    .then(() => {
+                        // Reload alerts after generation
+                        loadAlerts();
+                    })
+                    .catch(error => {
+                        console.error('Error generating alerts:', error);
+                        alertsContainer.innerHTML = '<div class="error-message">Error generating sample alerts.</div>';
+                    });
+            } else {
+                alertsContainer.innerHTML = '<div class="error-message">No employees found to generate alerts for.</div>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading employees:', error);
+            alertsContainer.innerHTML = '<div class="error-message">Error loading employees.</div>';
+        });
+}
+
+// Function to view alert details
+function viewAlertDetails(alertId) {
+    // In a real application, this would fetch detailed alert data
+    // For now, just show a demo alert
+    alert(`Viewing details for alert ID: ${alertId}`);
+}
+
+// Function to resolve an alert
+function resolveAlert(alertId) {
+    // In a real application, this would send a request to mark the alert as resolved
+    if (confirm('Are you sure you want to mark this alert as resolved?')) {
+        fetch(`/api/dashboard/alerts/${alertId}/resolve`, {
+            method: 'POST'
+        })
+        .then(response => {
+            if (response.ok) {
+                alert(`Alert ID ${alertId} has been marked as resolved.`);
+                // Reload alerts to refresh the list
+                loadAlerts();
+            } else {
+                alert('Error resolving alert. Please try again.');
+            }
+        })
+        .catch(error => {
+            console.error('Error resolving alert:', error);
+            alert('Error resolving alert. Please try again.');
+        });
+    }
 }
 
 // Function to generate reports

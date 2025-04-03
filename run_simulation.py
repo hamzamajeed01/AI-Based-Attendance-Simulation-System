@@ -6,7 +6,8 @@ import time
 import requests
 from datetime import datetime, timedelta
 import argparse
-from app import create_app
+# Import from app_main to avoid confusion with the app package
+from app_main import app, create_app
 from app.models.models import Employee, AttendanceRecord, Break, Alert, db
 from app.utils.helpers import generate_random_attendance_data, get_active_break
 
@@ -88,8 +89,9 @@ def seed_database():
     """Seed the database with sample employee data"""
     print("Seeding database with sample employees...")
     
-    app = create_app()
-    with app.app_context():
+    # Create a new app instance using the imported create_app function
+    flask_app = create_app()
+    with flask_app.app_context():
         # Check if we already have employees
         if Employee.query.count() > 0:
             print("Database already seeded with employees.")
@@ -107,8 +109,9 @@ def generate_historical_data(days_back=30):
     """Generate historical attendance data for specified number of days"""
     print(f"Generating historical attendance data for the past {days_back} days...")
     
-    app = create_app()
-    with app.app_context():
+    # Create a new app instance using the imported create_app function
+    flask_app = create_app()
+    with flask_app.app_context():
         # Get all employees
         employees = Employee.query.all()
         
@@ -171,8 +174,9 @@ def simulate_day():
     """Simulate a full day of attendance activities"""
     print("Starting full day attendance simulation...")
     
-    app = create_app()
-    with app.app_context():
+    # Create a new app instance using the imported create_app function
+    flask_app = create_app()
+    with flask_app.app_context():
         # Get all employees
         employees = Employee.query.all()
         
@@ -388,8 +392,9 @@ def interactive_mode():
     print("Interactive simulation mode started.")
     print("This mode allows you to manually simulate RFID card swipes.")
     
-    app = create_app()
-    with app.app_context():
+    # Create a new app instance using the imported create_app function
+    flask_app = create_app()
+    with flask_app.app_context():
         # Get all employees for reference
         employees = Employee.query.all()
         
@@ -519,22 +524,9 @@ if __name__ == "__main__":
     parser.add_argument('--simulate', action='store_true', help='Simulate a full day of attendance activities')
     parser.add_argument('--interactive', action='store_true', help='Interactive mode for manual simulation')
     
-    # Start the Flask server if needed
-    import threading
-    import time
-    from app import app
-    
-    def run_flask_server():
-        app.run(debug=False)
-    
-    # Start Flask server in a separate thread
-    flask_thread = threading.Thread(target=run_flask_server)
-    flask_thread.daemon = True
-    flask_thread.start()
-    
-    # Wait for server to start
-    print("Starting Flask server...")
-    time.sleep(2)
+    # No need to start Flask server as it's running in a separate terminal
+    print("Connecting to Flask server running on port 5000...")
+    time.sleep(1)
     
     args = parser.parse_args()
     
