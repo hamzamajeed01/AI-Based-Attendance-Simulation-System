@@ -1,6 +1,6 @@
 # Attendance Simulation System
 
-A comprehensive Flask-based RFID attendance system simulation that tracks employee check-ins/outs, breaks, working hours, and includes advanced anomaly detection capabilities.
+A comprehensive Flask-based RFID attendance system simulation that tracks employee check-ins/outs, breaks, working hours, and includes advanced anomaly detection capabilities with real-time dashboard visualization.
 
 ## Overview
 
@@ -29,13 +29,17 @@ The simulation allows for generating historical attendance data, simulating a fu
   - Pattern-based anomalies using historical data analysis
 - **Severity Classification**: Categorizes alerts by severity level (low, medium, high, critical)
 - **Consecutive Anomaly Detection**: Escalates severity for repeated anomalous behavior
+- **Alert Resolution System**: Ability to mark alerts as resolved with tracking
 
-### Admin Dashboard
-- **Real-time Overview**: Dashboard with current attendance statistics
+### Interactive Dashboard
+- **Real-time Overview**: Dashboard with current attendance statistics that auto-refreshes
 - **Visual Analytics**: Charts and graphs for attendance trends and anomaly distribution
 - **Employee Management**: Search, view, and manage employee information
-- **Alert Monitoring**: View and filter alerts by severity and time period
+- **Alert Monitoring**: View, filter, resolve, and manage alerts by severity and time period
 - **Reporting Tools**: Generate attendance, anomaly, and work hour reports
+- **Recent Activities Feed**: Live-updating feed of check-ins, check-outs, breaks, and alerts
+- **Navigation Tabs**: Easy navigation between dashboard sections (Overview, Employees, Alerts, Reports)
+- **Test Alert Generation**: Built-in functionality to generate sample alerts for testing
 
 ### Simulation Capabilities
 - **Dummy Data Generation**: Creates realistic employee profiles for testing
@@ -51,12 +55,13 @@ The simulation allows for generating historical attendance data, simulating a fu
 - **Database**: SQLite with SQLAlchemy ORM
 - **Frontend**: HTML, CSS, JavaScript with Chart.js for visualizations
 - **API Design**: RESTful endpoints for attendance, employees, alerts, and dashboard data
+- **Auto-refresh**: Real-time data updates using JavaScript polling
 
 ### Data Models
 - **Employee**: Stores employee information and RFID tag identifiers
 - **AttendanceRecord**: Tracks daily attendance with time stamps
 - **Break**: Records break periods within attendance records
-- **Alert**: Stores anomaly detection results with severity indicators
+- **Alert**: Stores anomaly detection results with severity indicators and resolution status
 
 ### Anomaly Detection System
 The system employs a two-pronged approach to anomaly detection:
@@ -76,7 +81,7 @@ The system employs a two-pronged approach to anomaly detection:
 The simulation engine provides several modes:
 
 - **Seed Database**: Creates initial employee data for testing
-- **Historical Data Generation**: Creates realistic attendance history
+- **Historical Data Generation**: Creates realistic attendance history with configurable days
 - **Day Simulation**: Simulates a full day with various attendance events
 - **Interactive Mode**: Allows manual triggering of attendance events
 
@@ -97,14 +102,18 @@ attendance-system/
 │   │   └── helpers.py      # Helper functions
 │   ├── static/             # Static files (CSS, JS)
 │   │   ├── css/
+│   │   │   └── styles.css  # Main stylesheet
 │   │   └── js/
+│   │       └── dashboard.js # Dashboard functionality
 │   └── templates/          # HTML templates
 │       ├── admin/
+│       ├── dashboard.html  # Main dashboard template
 │       └── index.html
 ├── config/                 # Configuration files
 │   └── config.py           # App configuration
 ├── data/                   # SQLite database and other data
 ├── app.py                  # Main application entry point
+├── app_main.py             # Flask server initialization
 ├── run_simulation.py       # Script to run automated simulations
 └── requirements.txt        # Project dependencies
 ```
@@ -140,6 +149,47 @@ The anomaly detection system works in several layers:
 - Escalates severity for persistent offenders
 - Creates critical alerts after configurable threshold is reached
 
+## Dashboard Features
+
+### Overview Section
+- **Key Statistics**: Total employees, present today, on break, alerts today
+- **Attendance Chart**: 7-day trend of attendance records
+- **Alert Type Distribution**: Doughnut chart showing alert distribution by severity
+- **Recent Activities**: Real-time feed of latest attendance activities with visual indicators
+  - Check-ins (→)
+  - Check-outs (←)
+  - Breaks (⏸)
+  - Alerts (⚠)
+
+### Employees Section
+- **Search Functionality**: Find employees by name, ID, or department
+- **Employee Cards**: Visual display of employee information
+- **Detailed View**: Click to see employee details including:
+  - Personal information
+  - Department and position
+  - Join date
+- **Attendance Records**: View detailed attendance history for each employee
+- **Alert History**: View alerts associated with specific employees
+
+### Alerts Section
+- **Filter System**: Filter alerts by:
+  - Severity (low, medium, high, critical)
+  - Time period (today, this week, this month, all)
+  - Employee
+- **Alert Table**: Detailed view of all alerts with:
+  - Timestamp
+  - Employee information
+  - Alert type and description
+  - Severity (color-coded)
+  - Status (active or resolved)
+- **Actions**: View alert details or mark alerts as resolved
+- **Test Alert Generation**: Generate sample alerts for testing the system
+
+### Reports Section
+- **Attendance Reports**: Overview of attendance patterns
+- **Anomaly Reports**: Summary of detected anomalies
+- **Hours Reports**: Analysis of working hours
+
 ## Usage Instructions
 
 ### Installation
@@ -147,11 +197,11 @@ The anomaly detection system works in several layers:
 1. Clone the repository
 2. Create a virtual environment:
    ```bash
-   python -m venv venv
+   python -m venv myenv
    ```
 3. Activate the virtual environment:
-   - Windows: `venv\Scripts\activate`
-   - Unix/MacOS: `source venv/bin/activate`
+   - Windows: `myenv\Scripts\activate`
+   - Unix/MacOS: `source myenv/bin/activate`
 4. Install dependencies:
    ```bash
    pip install -r requirements.txt
@@ -159,14 +209,14 @@ The anomaly detection system works in several layers:
 
 ### Running the Application
 
-1. Start the Flask application:
+1. Start the Flask application (in one terminal):
    ```bash
-   python app.py
+   python app_main.py
    ```
    This will start the server at http://localhost:5000
 
-2. Access the admin dashboard:
-   - Open your browser and go to http://localhost:5000/admin
+2. Access the dashboard:
+   - Open your browser and go to http://localhost:5000/dashboard
 
 ### Running Simulations
 
@@ -200,14 +250,12 @@ For manual simulation of attendance activities:
 python run_simulation.py --interactive
 ```
 
-## Configuration
+#### All-in-One Quick Setup
 
-Key settings can be adjusted in `config/config.py`:
-
-- Work hour expectations (normal start/end times, break durations)
-- Anomaly detection thresholds (late threshold, early departure threshold, etc.)
-- Alert severity levels
-- Database settings
+To seed the database, generate 5 days of historical data, and simulate a day:
+```bash
+python run_simulation.py --seed --historical --days 5 --simulate
+```
 
 ## API Endpoints
 
@@ -230,6 +278,22 @@ The system provides several API endpoints:
 ### Dashboard APIs
 - `GET /api/dashboard/stats`: Get dashboard statistics
 - `GET /api/dashboard/activities`: Get recent attendance activities
+- `GET /api/dashboard/alerts`: Get alerts with filtering options
+- `POST /api/dashboard/create-alert`: Create a test alert for demonstration
+- `POST /api/dashboard/alerts/<alert_id>/resolve`: Mark an alert as resolved
+
+## Recent Updates and Fixes
+
+- **Auto-Refresh Mechanism**: Dashboard now auto-refreshes every 30 seconds to show real-time data
+- **Enhanced Activities Display**: Improved visual representation of recent activities with color-coding and icons
+- **Alert Generation Tool**: Added functionality to generate sample alerts for testing
+- **Alert Resolution System**: Implemented system to mark alerts as resolved
+- **Improved UI**: Enhanced stylesheets for better visual hierarchy and user experience
+- **Fixed Issues**:
+  - Resolved circular import issues between app modules
+  - Fixed database column naming inconsistency between `resolved` and `is_resolved`
+  - Corrected API endpoint responses to ensure proper data formatting
+  - Fixed port configuration to consistently use port 5000 across all components
 
 ## Security Considerations
 
@@ -248,18 +312,8 @@ Potential areas for expansion:
 - Mobile application for remote attendance tracking
 - Integration with actual RFID hardware
 - Face recognition as an additional authentication method
-- Advanced analytics for workforce management
+- Email/SMS notifications for critical alerts
 - Integration with HR systems
-- Email/SMS notifications for anomalies
-- Geolocation verification for attendance events
-
-## License
-
-[MIT License](LICENSE)
-
-## Acknowledgments
-
-- Flask framework
-- SQLAlchemy ORM
-- Scikit-learn for machine learning algorithms
-- Chart.js for dashboard visualizations 
+- Advanced analytics and predictive modeling
+- Shift management and scheduling
+- Vacation and time-off tracking 
